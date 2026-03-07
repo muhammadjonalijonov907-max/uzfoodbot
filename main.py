@@ -1,11 +1,13 @@
+import os
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
-from config import TOKEN
 from handlers.start import start
 from handlers.message import message_handler, button_handler
 from handlers.admin import orders_command
 from database import init_db
 
+
+TOKEN = os.getenv("8766817601:AAHpZtHTHNAB82sYLj7iBrfwT2GPm-JIT3w")
 
 app = ApplicationBuilder().token(TOKEN).build()
 
