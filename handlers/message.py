@@ -1,159 +1,86 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import ContextTypes
-from data import restaurants, menu
-from keyboards.menu_keyboard import menu_keyboard, quantity_keyboard, restaurant_keyboard
-from database import add_order, update_status
+
+from data import menus,admins
+from keyboards import menu_keyboard,quantity_keyboard,type_keyboard,admin_keyboard
+from database import add_order
+
+from handlers.start import user_state,user_data
 
 
-orders = {}
-user_state = {}
-order_counter = 1000
+async def message_handler(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
+    user_id=update.message.from_user.id
+    text=update.message.text
 
+    state=user_state.get(user_id)
 
-async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if state=="restaurant":
 
-    text = update.message.text
-    user_id = update.message.from_user.id
-
-    state = user_state.get(user_id)
-
-    # ORQAGA
-    if text == "⬅ Orqaga":
-
-        if state == "menu":
-
-            user_state[user_id] = "start"
-
-            await update.message.reply_text(
-                "Oshxonani tanlang:",
-                reply_markup=restaurant_keyboard()
-            )
-
-        elif state == "quantity":
-
-            user_state[user_id] = "menu"
-
-            await update.message.reply_text(
-                "Menyudan tanlang:",
-                reply_markup=menu_keyboard()
-            )
-
-        return
-
-
-    # RESTAURANT TANLASH
-    if text in restaurants:
-
-        orders[user_id] = {"restaurant": text}
-
-        user_state[user_id] = "menu"
+        user_data[user_id]={"restaurant":text}
+        user_state[user_id]="food"
 
         await update.message.reply_text(
-            f"{text} menyusi 🍽",
-            reply_markup=menu_keyboard()
+            "Ovqat tanlang:",
+            reply_markup=menu_keyboard(menus[text])
         )
 
 
-    # OVQAT TANLASH
-    elif text in menu:
+    elif state=="food":
 
-        food = menu[text]
+        if text=="⬅ Orqaga":
+            user_state[user_id]="restaurant"
+            return
 
-        orders[user_id]["food"] = food
-
-        user_state[user_id] = "quantity"
+        user_data[user_id]["food"]=text
+        user_state[user_id]="quantity"
 
         await update.message.reply_text(
-            "Nechta buyurtma qilasiz?",
+            "Nechta?",
             reply_markup=quantity_keyboard()
         )
 
 
-    # SON TANLASH
-    elif text.isdigit() and state == "quantity":
+    elif state=="quantity":
 
-        global order_counter
+        if text=="⬅ Orqaga":
+            user_state[user_id]="food"
+            return
 
-        quantity = int(text)
+        user_data[user_id]["quantity"]=text
+        user_state[user_id]="type"
 
-        order_counter += 1
-        order_id = order_counter
+        await update.message.reply_text(
+            "Oshxonada ovqatlanish yoki olib ketish?",
+            reply_markup=type_keyboard()
+        )
 
-        restaurant = orders[user_id]["restaurant"]
-        food = orders[user_id]["food"]
 
-        orders[order_id] = {
-            "user_id": user_id,
-            "restaurant": restaurant,
-            "food": food,
-            "quantity": quantity
-        }
-        add_order(order_id, user_id, restaurant, food, quantity)
+    elif state=="type":
 
-        admin_id = 5378140881   # admin telegram id
+        order_type=text
 
-        keyboard = [
-            [
-                InlineKeyboardButton("Bor ✅", callback_data=f"yes_{order_id}"),
-                InlineKeyboardButton("Yo'q ❌", callback_data=f"no_{order_id}")
-            ]
-        ]
+        data=user_data[user_id]
 
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        order_id=add_order(
+            user_id,
+            data["restaurant"],
+            data["food"],
+            data["quantity"],
+            order_type
+        )
+
+        admin_id=admins[data["restaurant"]]
 
         await context.bot.send_message(
             admin_id,
-            f"🍽 Yangi buyurtma #{order_id}\n\n"
-            f"Oshxona: {restaurant}\n"
-            f"Ovqat: {food}\n"
-            f"Soni: {quantity}",
-            reply_markup=reply_markup
+            f"Yangi zakaz\n\n{data['restaurant']}\n{data['food']} {data['quantity']} ta\n{order_type}",
+            reply_markup=admin_keyboard(order_id)
         )
 
         await update.message.reply_text(
-            "Buyurtmangiz oshxonaga yuborildi ⏳"
-        )
-async def button_handler(update, context):
-
-    query = update.callback_query
-    await query.answer()
-
-    data = query.data
-
-    action, order_id = data.split("_")
-    order_id = int(order_id)
-
-    order = orders.get(order_id)
-
-    if not order:
-        await query.edit_message_text("Buyurtma topilmadi")
-        return
-
-    user_id = order["user_id"]
-
-    if action == "yes":
-        update_status(order_id, "accepted")
-
-        await context.bot.send_message(
-            user_id,
-            f"✅ Buyurtmangiz #{order_id} qabul qilindi"
+            "📦 Buyurtmangiz oshxonaga yuborildi.\n\n"
+            "Iltimos biroz kuting ⏳"
         )
 
-        await query.edit_message_text(
-            f"✅ Buyurtma #{order_id} tasdiqlandi"
-        )
-
-    elif action == "no":
-        update_status(order_id, "rejected")
-
-        await context.bot.send_message(
-            user_id,
-            f"❌ Buyurtma #{order_id} rad etildi"
-        )
-
-        await query.edit_message_text(
-            f"❌ Buyurtma #{order_id} bekor qilindi"
-        )
-   
-   
+        user_state[user_id]="done"

@@ -1,20 +1,19 @@
 import sqlite3
 
-DB_NAME = "orders.db"
-
 
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS orders (
-        id INTEGER PRIMARY KEY,
+    conn = sqlite3.connect("orders.db")
+    cur = conn.cursor()
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS orders(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
         restaurant TEXT,
         food TEXT,
-        quantity INTEGER,
-        status TEXT
+        quantity TEXT,
+        type TEXT
     )
     """)
 
@@ -22,38 +21,33 @@ def init_db():
     conn.close()
 
 
-def add_order(order_id, user_id, restaurant, food, quantity):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
+def add_order(user_id,restaurant,food,quantity,type):
 
-    cursor.execute(
-        "INSERT INTO orders VALUES (?, ?, ?, ?, ?, ?)",
-        (order_id, user_id, restaurant, food, quantity, "pending")
+    conn = sqlite3.connect("orders.db")
+    cur = conn.cursor()
+
+    cur.execute(
+        "INSERT INTO orders(user_id,restaurant,food,quantity,type) VALUES(?,?,?,?,?)",
+        (user_id,restaurant,food,quantity,type)
     )
 
     conn.commit()
-    conn.close()
 
-
-def update_status(order_id, status):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "UPDATE orders SET status=? WHERE id=?",
-        (status, order_id)
-    )
-
-    conn.commit()
-    conn.close()
-def get_orders():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT * FROM orders ORDER BY id DESC")
-
-    orders = cursor.fetchall()
+    order_id = cur.lastrowid
 
     conn.close()
 
-    return orders
+    return order_id
+
+
+def get_user(order_id):
+
+    conn = sqlite3.connect("orders.db")
+    cur = conn.cursor()
+
+    cur.execute("SELECT user_id FROM orders WHERE id=?",(order_id,))
+    user=cur.fetchone()
+
+    conn.close()
+
+    return user[0]
